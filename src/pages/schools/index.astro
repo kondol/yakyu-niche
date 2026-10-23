@@ -1,0 +1,45 @@
+---
+import Base from '../../layouts/Base.astro';
+import { players, schools } from '../../lib/data';
+import { link } from '../../lib/url';
+
+const rows = schools
+  .map((s) => {
+    const ps = players.filter((p) => p.schoolId === s.id);
+    return { ...s, pros: ps.length, firsts: ps.filter((p) => p.draftRound === '1').length };
+  })
+  .sort((a, b) => b.pros - a.pros || b.appearances - a.appearances);
+const maxPros = Math.max(...rows.map((r) => r.pros), 1);
+---
+<Base title="高校一覧">
+  <h1>高校一覧</h1>
+  <p class="lead">プロ輩出数の多い順に並べています。高校名を選ぶと、甲子園の成績とプロ入りした選手の年表を見られます。</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>高校</th><th>都道府県</th><th>プロ輩出数</th><th class="num">うち1位指名</th><th class="num">甲子園出場</th><th class="num">勝敗</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr>
+            <td><a href={link(`/schools/${r.id}/`)}>{r.name}</a></td>
+            <td>{r.prefecture}</td>
+            <td>
+              <span class="bar"><span style={`width:${(r.pros / maxPros) * 100}%`}></span></span>
+              <span class="n">{r.pros}</span>
+            </td>
+            <td class="num">{r.firsts}</td>
+            <td class="num">{r.appearances}回</td>
+            <td class="num">{r.wins}勝{r.losses}敗</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</Base>
+
+<style>
+  .bar { display: inline-block; width: 120px; height: 8px; background: var(--surface-muted); border-radius: 4px; overflow: hidden; vertical-align: middle; }
+  .bar span { display: block; height: 100%; background: var(--school); }
+  .n { display: inline-block; min-width: 2em; text-align: right; margin-left: 6px; font-variant-numeric: tabular-nums; }
+</style>

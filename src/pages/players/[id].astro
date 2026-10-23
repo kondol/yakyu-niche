@@ -1,0 +1,112 @@
+---
+import Base from '../../layouts/Base.astro';
+import { players, schoolById, type Player } from '../../lib/data';
+import { LEAGUE_OF } from '../../lib/japan';
+import { link } from '../../lib/url';
+
+export function getStaticPaths() {
+  return players.map((p) => ({ params: { id: p.id }, props: { player: p } }));
+}
+
+const { player } = Astro.props as { player: Player };
+const school = schoolById.get(player.schoolId)!;
+const roundLabel = (r: string) => (r === '育成' ? '育成' : r + '位');
+const others = players.filter((p) => p.id !== player.id);
+const byNearYear = (a: Player, b: Player) => Math.abs(a.draftYear - player.draftYear) - Math.abs(b.draftYear - player.draftYear);
+
+// 3つのつながり: 同じ高校 / 同じ年に同じ球団へ入団 / 同じ年に同じ順位で指名
+const groups = [
+  { key: 'school', title: `${school.name}の先輩・後輩`, hub: school.name, href: link(`/schools/${school.id}/`), list: others.filter((p) => p.schoolId === player.schoolId).sort(byNearYear) },
+  { key: 'team', title: `${player.draftYear}年 ${player.team}の同期入団`, hub: `${player.draftYear} ${player.team}`, href: null, list: others.filter((p) => p.team === player.team && p.draftYear === player.draftYear) },
+  { key: 'round', title: `${player.draftYear}年 ${roundLabel(player.draftRound)}指名の選手`, hub: `${player.draftYear} ${roundLabel(player.draftRound)}`, href: null, list: others.filter((p) => p.draftYear === player.draftYear && p.draftRound === player.draftRound) },
+];
+
+// 関係図の配置: 中心に本人、3方向にハブ、ハブの外側に関係する選手を扇状に並べる
+const W = 760, H = 500, CX = W / 2, CY = 190, HUB_R = 140, LEAF_R = 110, MAX_LEAVES = 5, SPREAD = 2.2;
+const angles = [180, 0, 90];
+const graph = groups.map((g, gi) => {
+  const a = (angles[gi] * Math.PI) / 180;
+  const hx = CX + Math.cos(a) * HUB_R, hy = CY + Math.sin(a) * HUB_R;
+  const shown = g.list.slice(0, MAX_LEAVES);
+  const leaves = shown.map((p, i) => {
+    const spread = shown.length > 1 ? ((i / (shown.length - 1)) - 0.5) * SPREAD : 0;
+    const la = a + spread;
+    return { p, x: hx + Math.cos(la) * LEAF_R, y: hy + Math.sin(la) * LEAF_R };
+  });
+  return { ...g, hx, hy, leaves, more: g.list.length - shown.length };
+});
+---
+<Base title={player.name}>
+  <p class="crumb"><a href={link(`/schools/${school.id}/`)}>{school.name}</a> / {player.draftYear}年ドラフト</p>
+  <h1>{player.name}</h1>
+  <p class="lead">
+    {school.prefecture}・{school.name}出身 / {player.draftYear}年 {roundLabel(player.draftRound)}指名で
+    <span class:list={['tag', LEAGUE_OF[player.team] === 'セ' ? 'se' : 'pa']}>{player.team}</span> へ入団 / {player.position}
+    {player.koshien && <span class="tag">甲子園出場</span>}
+  </p>
+
+  <h2>つながり</h2>
+  <div class="card">
+    <div class="chart-scroll">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${player.name}と関係する選手のつながり図`}>
+        {graph.map((g) => (
+          <g>
+            <line x1={CX} y1={CY} x2={g.hx} y2={g.hy} class="edge main" />
+            {g.leaves.map((l) => <line x1={g.hx} y1={g.hy} x2={l.x} y2={l.y} class="edge" />)}
+          </g>
+        ))}
+        {graph.map((g) => (
+          <g>
+            {g.leaves.map((l) => (
+              <a href={link(`/players/${l.p.id}/`)} class="leaf">
+                <circle cx={l.x} cy={l.y} r="6" fill={LEAGUE_OF[l.p.team] === 'セ' ? 'var(--se)' : 'var(--pa)'} />
+                <text x={l.x} y={l.y + 20} text-anchor="middle" class="leaf-label">{l.p.name}</text>
+                <text x={l.x} y={l.y + 33} text-anchor="middle" class="leaf-sub">{l.p.draftYear} {l.p.team}</text>
+              </a>
+            ))}
+            {g.href ? (
+              <a href={g.href}><rect x={g.hx - 64} y={g.hy - 14} width="128" height="28" rx="14" class="hub" /><text x={g.hx} y={g.hy + 5} text-anchor="middle" class="hub-label">{g.hub}</text></a>
+            ) : (
+              <g><rect x={g.hx - 64} y={g.hy - 14} width="128" height="28" rx="14" class="hub" /><text x={g.hx} y={g.hy + 5} text-anchor="middle" class="hub-label">{g.hub}</text></g>
+            )}
+            {g.leaves.length === 0 && <text x={g.hx} y={g.hy + 32} text-anchor="middle" class="leaf-sub">該当なし</text>}
+            {g.more > 0 && <text x={g.hx} y={g.hy - 22} text-anchor="middle" class="leaf-sub">ほか{g.more}人</text>}
+          </g>
+        ))}
+        <circle cx={CX} cy={CY} r="26" class="center" />
+        <text x={CX} y={CY + 5} text-anchor="middle" class="center-label">{player.name.split(' ')[0]}</text>
+      </svg>
+    </div>
+  </div>
+
+  {groups.map((g) => g.list.length > 0 && (
+    <>
+      <h2>{g.title}（{g.list.length}人）</h2>
+      <div class="chips">
+        {g.list.map((p) => (
+          <a class="chip" href={link(`/players/${p.id}/`)}>{p.name}<span class="sub">{p.draftYear} {p.team}</span></a>
+        ))}
+      </div>
+    </>
+  ))}
+</Base>
+
+<style>
+  .crumb { font-size: 13px; color: var(--text-faint); margin: 0 0 4px; }
+  .chart-scroll { overflow-x: auto; }
+  svg { display: block; width: 100%; min-width: 600px; height: auto; }
+  .edge { stroke: var(--border-strong); stroke-width: 1; }
+  .edge.main { stroke-width: 2; }
+  .hub { fill: var(--accent-bg); stroke: var(--accent); }
+  .hub-label { font-size: 12px; font-weight: 600; fill: var(--accent); }
+  .center { fill: var(--school); }
+  .center-label { font-size: 13px; font-weight: 700; fill: #ffffff; }
+  .leaf circle { transition: r 0.1s; }
+  .leaf:hover circle { r: 8; }
+  .leaf-label { font-size: 12px; fill: var(--text); }
+  .leaf-sub { font-size: 10.5px; fill: var(--text-faint); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 13px; padding: 3px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--text); background: var(--surface); }
+  .chip:hover { border-color: var(--accent); text-decoration: none; }
+  .chip .sub { color: var(--text-faint); font-size: 11px; margin-left: 6px; }
+</style>

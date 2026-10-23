@@ -1,0 +1,10 @@
+---
+import Base from '../layouts/Base.astro';
+import PrefMap from '../components/PrefMap.svelte';
+import { players, schools } from '../lib/data';
+---
+<Base title="都道府県マップ">
+  <h1>都道府県マップ</h1>
+  <p class="lead">プロ輩出数や甲子園の成績を、都道府県ごとの色の濃さで比べます。条件を変えると色分けとランキングがその場で切り替わります。</p>
+  <PrefMap client:load players={players} schools={schools} />
+</Base>

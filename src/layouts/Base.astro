@@ -1,0 +1,53 @@
+---
+import '../styles/global.css';
+import { IS_SAMPLE } from '../lib/data';
+import { link } from '../lib/url';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description = '高校野球とプロ野球のニッチなデータを、絞り込みと図で探せるサイト' } = Astro.props;
+const path = Astro.url.pathname.replace(import.meta.env.BASE_URL.replace(/\/$/, ''), '') || '/';
+const nav = [
+  { href: '/', label: '高校からプロへ' },
+  { href: '/map/', label: '都道府県マップ' },
+  { href: '/schools/', label: '高校一覧' },
+];
+---
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title} | 野球ニッチデータ</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="inner">
+        <a class="logo" href={link('/')}>野球ニッチデータ</a>
+        <nav>
+          {nav.map((n) => (
+            <a href={link(n.href)} class:list={{ active: n.href === '/' ? path === '/' : path.startsWith(n.href) }}>{n.label}</a>
+          ))}
+        </nav>
+      </div>
+    </header>
+    {IS_SAMPLE && <div class="sample-banner">表示中のデータは画面確認用の架空サンプルです</div>}
+    <main class="wrap">
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style>
+  .site-header { border-bottom: 1px solid var(--border); background: var(--surface); }
+  .inner { max-width: 1080px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+  .logo { font-weight: 700; color: var(--text); font-size: 16px; }
+  nav { display: flex; flex-wrap: wrap; gap: 4px; }
+  nav a { color: var(--text-sub); padding: 4px 10px; border-radius: var(--radius); font-size: 14px; }
+  nav a:hover { background: var(--surface-muted); text-decoration: none; }
+  nav a.active { background: var(--accent-bg); color: var(--accent); }
+  .sample-banner { background: var(--surface-muted); color: var(--text-sub); font-size: 12px; text-align: center; padding: 4px 16px; }
+</style>

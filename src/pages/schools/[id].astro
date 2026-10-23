@@ -1,0 +1,133 @@
+---
+import Base from '../../layouts/Base.astro';
+import { players, playersOfSchool, schools, type School } from '../../lib/data';
+import { LEAGUE_OF } from '../../lib/japan';
+import { link } from '../../lib/url';
+
+export function getStaticPaths() {
+  return schools.map((s) => ({ params: { id: s.id }, props: { school: s } }));
+}
+
+const { school } = Astro.props as { school: School };
+const ps = playersOfSchool(school.id);
+const games = school.wins + school.losses;
+const winRate = games ? (school.wins / games).toFixed(3).replace(/^0/, '') : '–';
+
+// 年表: 指名年ごとに選手を縦に積む
+const minYear = Math.min(...players.map((p) => p.draftYear));
+const maxYear = Math.max(...players.map((p) => p.draftYear));
+const W = 760, PAD = 24, R = 7, ROW = 18;
+const span = maxYear - minYear || 1;
+const xOf = (y: number) => PAD + ((y - minYear) / span) * (W - PAD * 2);
+const stack = new Map<number, number>();
+const dots = ps.map((p) => {
+  const i = stack.get(p.draftYear) ?? 0;
+  stack.set(p.draftYear, i + 1);
+  return { p, x: xOf(p.draftYear), i };
+});
+const maxStack = Math.max(1, ...stack.values());
+const H = maxStack * ROW + 40;
+const ticks: number[] = [];
+for (let y = Math.ceil(minYear / 5) * 5; y <= maxYear; y += 5) ticks.push(y);
+
+const teamCount = [...ps.reduce((m, p) => m.set(p.team, (m.get(p.team) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1]);
+const samePref = schools.filter((s) => s.prefecture === school.prefecture && s.id !== school.id).slice(0, 8);
+---
+<Base title={school.name}>
+  <p class="crumb"><a href={link('/schools/')}>高校一覧</a> / {school.prefecture}</p>
+  <h1>{school.name}</h1>
+  <p class="lead">{school.prefecture}（{school.region}）</p>
+
+  <div class="stats">
+    <div class="stat"><div class="label">プロ輩出数</div><div class="value">{ps.length}人</div></div>
+    <div class="stat"><div class="label">甲子園出場</div><div class="value">{school.appearances}回</div></div>
+    <div class="stat"><div class="label">甲子園通算</div><div class="value">{school.wins}勝{school.losses}敗</div></div>
+    <div class="stat"><div class="label">勝率</div><div class="value">{winRate}</div></div>
+  </div>
+
+  <h2>プロ入りした選手の年表</h2>
+  {ps.length ? (
+    <div class="card">
+      <div class="legend">
+        <span><i style="background: var(--se)"></i>セ・リーグ</span>
+        <span><i style="background: var(--pa)"></i>パ・リーグ</span>
+        <span class="faint">点を選ぶと選手のページへ移ります</span>
+      </div>
+      <div class="chart-scroll">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${school.name}出身選手の指名年の年表`}>
+          {ticks.map((t) => (
+            <g>
+              <line x1={xOf(t)} x2={xOf(t)} y1={0} y2={H - 22} stroke="var(--border)" />
+              <text x={xOf(t)} y={H - 6} text-anchor="middle" class="tick">{t}</text>
+            </g>
+          ))}
+          <line x1={PAD} x2={W - PAD} y1={H - 22} y2={H - 22} stroke="var(--border-strong)" />
+          {dots.map((d) => (
+            <a href={link(`/players/${d.p.id}/`)}>
+              <circle cx={d.x} cy={H - 22 - ROW / 2 - d.i * ROW - 2} r={R} fill={LEAGUE_OF[d.p.team] === 'セ' ? 'var(--se)' : 'var(--pa)'} fill-opacity="0.8">
+                <title>{`${d.p.draftYear}年 ${d.p.name}（${d.p.team} ${d.p.draftRound === '育成' ? '育成' : d.p.draftRound + '位'}）`}</title>
+              </circle>
+            </a>
+          ))}
+        </svg>
+      </div>
+    </div>
+  ) : <p class="faint">登録されているプロ選手はまだいません。</p>}
+
+  {teamCount.length > 0 && (
+    <>
+      <h2>入団した球団</h2>
+      <div class="teams">
+        {teamCount.map(([t, n]) => (
+          <span class:list={['tag', LEAGUE_OF[t] === 'セ' ? 'se' : 'pa']}>{t} {n}人</span>
+        ))}
+      </div>
+    </>
+  )}
+
+  {ps.length > 0 && (
+    <>
+      <h2>選手一覧</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>選手</th><th class="num">指名年</th><th>順位</th><th>球団</th><th>ポジション</th><th>甲子園</th></tr></thead>
+          <tbody>
+            {[...ps].reverse().map((p) => (
+              <tr>
+                <td><a href={link(`/players/${p.id}/`)}>{p.name}</a></td>
+                <td class="num">{p.draftYear}</td>
+                <td>{p.draftRound === '育成' ? '育成' : p.draftRound + '位'}</td>
+                <td>{p.team}</td>
+                <td>{p.position}</td>
+                <td>{p.koshien ? '出場' : ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )}
+
+  {samePref.length > 0 && (
+    <>
+      <h2>{school.prefecture}のほかの高校</h2>
+      <div class="teams">
+        {samePref.map((s) => <a class="tag" href={link(`/schools/${s.id}/`)}>{s.name}</a>)}
+      </div>
+    </>
+  )}
+</Base>
+
+<style>
+  .crumb { font-size: 13px; color: var(--text-faint); margin: 0 0 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--text-sub); margin-bottom: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .faint { color: var(--text-faint); font-size: 13px; }
+  .chart-scroll { overflow-x: auto; }
+  svg { display: block; width: 100%; min-width: 560px; height: auto; }
+  .tick { font-size: 11px; fill: var(--text-faint); }
+  circle { cursor: pointer; }
+  circle:hover { fill-opacity: 1; stroke: var(--text); stroke-width: 2; }
+  .teams { display: flex; flex-wrap: wrap; gap: 6px; }
+  .teams .tag { font-size: 13px; padding: 3px 10px; }
+</style>

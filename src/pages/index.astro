@@ -1,0 +1,10 @@
+---
+import Base from '../layouts/Base.astro';
+import FlowExplorer from '../components/FlowExplorer.svelte';
+import { players, schools } from '../lib/data';
+---
+<Base title="高校からプロへ">
+  <h1>高校からプロへ</h1>
+  <p class="lead">どの高校から、どの球団へ何人が入ったか。条件を変えると図と表がその場で切り替わります。絞り込んだ状態はURLに残るので、そのまま共有できます。</p>
+  <FlowExplorer client:load players={players} schools={schools} />
+</Base>
